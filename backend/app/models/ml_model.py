@@ -2,6 +2,7 @@
 ML Model Loader - Télécharge et charge le modèle depuis GitHub Releases
 """
 import os
+import sys
 import logging
 import pickle
 from pathlib import Path
@@ -90,6 +91,16 @@ class CatBoostRegressorWrapper(BaseEstimator, RegressorMixin):
             input_tags=InputTags()
         )
         return tags
+
+
+# ============================================
+# CRITICAL: Inject class into __main__ for pickle
+# ============================================
+# When the model was trained, CatBoostRegressorWrapper was defined in __main__
+# pickle saved the reference as "__main__.CatBoostRegressorWrapper"
+# Now we need to make it available in __main__ for unpickling to work
+import __main__
+__main__.CatBoostRegressorWrapper = CatBoostRegressorWrapper
 
 
 # ============================================
