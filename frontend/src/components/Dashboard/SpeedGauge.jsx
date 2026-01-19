@@ -1,14 +1,18 @@
+/**
+ * SpeedGauge - Speed Display Component
+ * 
+ * FIXED VERSION:
+ * - All text in English
+ * - Cleaner mobile-friendly display
+ */
 import React from 'react';
 import CircularGauge from '../common/CircularGauge';
 
-/**
- * Speed gauge component - main dashboard display
- */
 export default function SpeedGauge({ 
   speed = 0, 
   recommendedSpeed = null,
   maxSpeed = 180,
-  size = 280,
+  size = 200,
 }) {
   // Color based on speed vs recommended
   let color = '#00d26a'; // Green - optimal
@@ -44,15 +48,15 @@ export default function SpeedGauge({
         min={0}
         max={maxSpeed}
         size={size}
-        strokeWidth={14}
+        strokeWidth={12}
         color={color}
-        label="vitesse"
+        label="speed"
         unit="km/h"
         segments={segments}
       >
         {/* Recommended speed indicator */}
         {recommendedSpeed !== null && speed > 5 && (
-          <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
+          <div className="mt-1 flex items-center gap-1 text-[10px] text-gray-400">
             <span>Optimal:</span>
             <span className="text-green-400 font-medium">{Math.round(recommendedSpeed)}</span>
             <span>km/h</span>

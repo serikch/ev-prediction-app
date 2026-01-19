@@ -6,4 +6,8 @@ export default defineConfig({
   server: {
     port: 3000,
   },
+  define: {
+    // Ensure VITE_API_URL is available
+    'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || 'https://ev-prediction-app.onrender.com')
+  }
 })

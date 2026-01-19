@@ -1,8 +1,10 @@
 /**
  * AccelerationBar - Horizontal Acceleration Indicator
  * 
- * Shows current acceleration/deceleration with eco zones.
- * Negative = braking/regen, Positive = acceleration
+ * FIXED VERSION:
+ * - All text in English
+ * - Shows current acceleration/deceleration with eco zones
+ * - Negative = braking/regen, Positive = acceleration
  */
 import { useMemo } from 'react';
 import { ArrowLeft, ArrowRight, Leaf } from 'lucide-react';
@@ -39,7 +41,7 @@ export default function AccelerationBar({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-            AccÃ©lÃ©ration
+            Acceleration
           </span>
           {isEco && (
             <div className="flex items-center gap-1 px-2 py-0.5 bg-ev-green/20 rounded-full">
@@ -49,7 +51,7 @@ export default function AccelerationBar({
           )}
         </div>
         <span className={`text-sm font-bold text-${accelColor}`}>
-          {acceleration >= 0 ? '+' : ''}{acceleration.toFixed(2)} m/sÂ²
+          {acceleration >= 0 ? '+' : ''}{acceleration.toFixed(2)} m/s²
         </span>
       </div>
       
@@ -113,15 +115,15 @@ export default function AccelerationBar({
       {/* Status Text */}
       <div className="text-center text-xs text-gray-500">
         {acceleration < -1.5 ? (
-          <span className="text-ev-blue">Freinage fort - RÃ©gÃ©nÃ©ration maximale</span>
+          <span className="text-ev-blue">Hard braking - Max regeneration</span>
         ) : acceleration < -0.3 ? (
-          <span className="text-ev-blue">DÃ©cÃ©lÃ©ration - RÃ©gÃ©nÃ©ration active</span>
+          <span className="text-ev-blue">Decelerating - Regen active</span>
         ) : acceleration < 0.3 ? (
-          <span className="text-ev-green">Conduite fluide - Mode Ã©co</span>
+          <span className="text-ev-green">Smooth driving - Eco mode</span>
         ) : acceleration < 1.0 ? (
-          <span className="text-ev-orange">AccÃ©lÃ©ration modÃ©rÃ©e</span>
+          <span className="text-ev-orange">Moderate acceleration</span>
         ) : (
-          <span className="text-ev-red">AccÃ©lÃ©ration forte - Consommation Ã©levÃ©e</span>
+          <span className="text-ev-red">Strong acceleration - High consumption</span>
         )}
       </div>
     </div>

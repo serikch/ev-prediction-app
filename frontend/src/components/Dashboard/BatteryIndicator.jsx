@@ -1,14 +1,18 @@
+/**
+ * BatteryIndicator - Battery Level Display
+ * 
+ * FIXED VERSION:
+ * - All text in English
+ * - Clean, mobile-friendly display
+ */
 import React from 'react';
 import { Battery, BatteryCharging, BatteryLow, BatteryWarning } from 'lucide-react';
 
-/**
- * Battery level indicator with estimated range
- */
 export default function BatteryIndicator({ 
   soc = 80, 
   estimatedRange = null,
   isCharging = false,
-  batteryCapacity = 60.5, // kWh
+  batteryCapacity = 78.8, // BEV2 default
   averageEfficiency = 18, // kWh/100km
 }) {
   // Calculate estimated range if not provided
@@ -33,26 +37,26 @@ export default function BatteryIndicator({
   };
 
   return (
-    <div className="ev-card rounded-2xl p-4">
+    <div className="ev-card rounded-xl p-3">
       {/* Header */}
-      <div className="flex justify-between items-center mb-3">
+      <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-2" style={{ color }}>
           <BatteryIcon />
-          <span className="text-sm uppercase tracking-wider text-gray-400">Batterie</span>
+          <span className="text-xs uppercase tracking-wider text-gray-400">Battery</span>
         </div>
         <div className="flex items-baseline gap-1">
           <span 
-            className="text-3xl font-bold number-display"
+            className="text-2xl font-bold number-display"
             style={{ color }}
           >
             {Math.round(soc)}
           </span>
-          <span className="text-gray-500">%</span>
+          <span className="text-gray-500 text-sm">%</span>
         </div>
       </div>
 
       {/* Battery bar */}
-      <div className="relative h-8 rounded-lg bg-ev-darker border border-gray-700 overflow-hidden">
+      <div className="relative h-6 rounded-lg bg-ev-darker border border-gray-700 overflow-hidden">
         {/* Fill */}
         <div
           className="absolute inset-y-0 left-0 rounded-l-md transition-all duration-500 battery-fill"
@@ -88,23 +92,21 @@ export default function BatteryIndicator({
       </div>
 
       {/* Footer - Range estimation */}
-      <div className="flex justify-between items-center mt-3">
-        <div className="flex items-center gap-2 text-sm text-gray-400">
-          <span>Autonomie estimÃ©e</span>
-        </div>
+      <div className="flex justify-between items-center mt-2">
+        <span className="text-xs text-gray-400">Estimated range</span>
         <div className="flex items-baseline gap-1">
-          <span className="text-xl font-bold number-display" style={{ color }}>
+          <span className="text-lg font-bold number-display" style={{ color }}>
             {range}
           </span>
-          <span className="text-gray-500 text-sm">km</span>
+          <span className="text-gray-500 text-xs">km</span>
         </div>
       </div>
 
       {/* Low battery warning */}
       {soc <= 20 && !isCharging && (
-        <div className="mt-3 flex items-center gap-2 text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
-          <BatteryWarning className="w-4 h-4" />
-          <span>Batterie faible - Recherchez une borne</span>
+        <div className="mt-2 flex items-center gap-2 text-xs text-red-400 bg-red-500/10 rounded-lg px-2 py-1.5">
+          <BatteryWarning className="w-3 h-3" />
+          <span>Low battery - Find a charging station</span>
         </div>
       )}
     </div>

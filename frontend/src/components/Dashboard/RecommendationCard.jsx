@@ -1,11 +1,10 @@
 /**
  * RecommendationCard - Contextual Driving Advice
  * 
- * Provides real-time driving recommendations based on:
- * - Current power consumption
- * - Speed
- * - Slope/grade
- * - Acceleration patterns
+ * FIXED VERSION:
+ * - All text in English
+ * - More prominent display
+ * - Cleaner layout for mobile
  */
 import { useMemo, useState, useEffect } from 'react';
 import { 
@@ -18,35 +17,39 @@ import {
   ThumbsUp,
   ArrowDown,
   BatteryCharging,
-  Snowflake,
-  Sun
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 // Recommendation types with styling
 const RECOMMENDATION_STYLES = {
   success: {
-    bg: 'from-ev-green/20 to-ev-green/5',
-    border: 'border-ev-green/30',
-    icon: 'bg-ev-green/20 text-ev-green',
+    bg: 'from-ev-green/30 to-ev-green/10',
+    border: 'border-ev-green/40',
+    icon: 'bg-ev-green/30 text-ev-green',
     text: 'text-ev-green',
+    glow: 'shadow-ev-green/20',
   },
   warning: {
-    bg: 'from-ev-orange/20 to-ev-orange/5',
-    border: 'border-ev-orange/30',
-    icon: 'bg-ev-orange/20 text-ev-orange',
+    bg: 'from-ev-orange/30 to-ev-orange/10',
+    border: 'border-ev-orange/40',
+    icon: 'bg-ev-orange/30 text-ev-orange',
     text: 'text-ev-orange',
+    glow: 'shadow-ev-orange/20',
   },
   danger: {
-    bg: 'from-ev-red/20 to-ev-red/5',
-    border: 'border-ev-red/30',
-    icon: 'bg-ev-red/20 text-ev-red',
+    bg: 'from-ev-red/30 to-ev-red/10',
+    border: 'border-ev-red/40',
+    icon: 'bg-ev-red/30 text-ev-red',
     text: 'text-ev-red',
+    glow: 'shadow-ev-red/20',
   },
   info: {
-    bg: 'from-ev-blue/20 to-ev-blue/5',
-    border: 'border-ev-blue/30',
-    icon: 'bg-ev-blue/20 text-ev-blue',
+    bg: 'from-ev-blue/30 to-ev-blue/10',
+    border: 'border-ev-blue/40',
+    icon: 'bg-ev-blue/30 text-ev-blue',
     text: 'text-ev-blue',
+    glow: 'shadow-ev-blue/20',
   },
 };
 
@@ -57,9 +60,9 @@ export default function RecommendationCard({
   acceleration = 0,
   efficiency = 0,
   temperature = 18,
+  compact = false, // New prop for compact mode at top of screen
 }) {
   const [showDetails, setShowDetails] = useState(false);
-  const [recentRecommendations, setRecentRecommendations] = useState([]);
   
   // Generate recommendation based on current conditions
   const recommendation = useMemo(() => {
@@ -68,10 +71,10 @@ export default function RecommendationCard({
       return {
         type: 'info',
         icon: BatteryCharging,
-        title: 'RÃ©gÃ©nÃ©ration active',
-        message: `${Math.abs(power).toFixed(0)} kW rÃ©cupÃ©rÃ©s. Maintenez une dÃ©cÃ©lÃ©ration progressive.`,
-        tip: 'La rÃ©gÃ©nÃ©ration maximale est atteinte avec un freinage doux et anticipÃ©.',
-        savings: Math.abs(power) * 0.7, // Estimated recovery
+        title: 'Regeneration Active',
+        message: `${Math.abs(power).toFixed(0)} kW recovered. Maintain gradual deceleration.`,
+        tip: 'Maximum regeneration is achieved with smooth, anticipated braking.',
+        savings: Math.abs(power) * 0.7,
       };
     }
     
@@ -80,9 +83,9 @@ export default function RecommendationCard({
       return {
         type: 'danger',
         icon: AlertTriangle,
-        title: 'Consommation trÃ¨s Ã©levÃ©e',
-        message: `${power.toFixed(0)} kW consommÃ©s. RÃ©duisez Ã  90 km/h pour Ã©conomiser ~25%.`,
-        tip: 'La rÃ©sistance aÃ©rodynamique augmente au carrÃ© de la vitesse.',
+        title: 'Very High Consumption',
+        message: `${power.toFixed(0)} kW consumed. Reduce to 90 km/h to save ~25%.`,
+        tip: 'Aerodynamic drag increases with the square of speed.',
         savings: power * 0.25,
       };
     }
@@ -92,9 +95,9 @@ export default function RecommendationCard({
       return {
         type: 'warning',
         icon: TrendingDown,
-        title: `MontÃ©e ${slope.toFixed(1)}%`,
-        message: 'Maintenez une vitesse stable, Ã©vitez les accÃ©lÃ©rations.',
-        tip: 'Anticipez la descente pour rÃ©cupÃ©rer de l\'Ã©nergie.',
+        title: `Uphill ${slope.toFixed(1)}%`,
+        message: 'Maintain steady speed, avoid accelerations.',
+        tip: 'Anticipate the downhill to recover energy.',
         savings: power * 0.15,
       };
     }
@@ -104,9 +107,9 @@ export default function RecommendationCard({
       return {
         type: 'warning',
         icon: Gauge,
-        title: 'AccÃ©lÃ©ration forte',
-        message: 'Une accÃ©lÃ©ration plus douce Ã©conomise 15-20% d\'Ã©nergie.',
-        tip: 'Visualisez l\'accÃ©lÃ©ration comme un compte-gouttes d\'Ã©nergie.',
+        title: 'Strong Acceleration',
+        message: 'Gentler acceleration saves 15-20% energy.',
+        tip: 'Think of acceleration as an energy tap.',
         savings: power * 0.18,
       };
     }
@@ -116,9 +119,9 @@ export default function RecommendationCard({
       return {
         type: 'warning',
         icon: Wind,
-        title: 'Vitesse Ã©levÃ©e',
-        message: `Ã€ ${speed.toFixed(0)} km/h, rÃ©duire Ã  110 km/h Ã©conomise ~15%.`,
-        tip: 'L\'Ã©nergie aÃ©rodynamique triple entre 100 et 150 km/h.',
+        title: 'High Speed',
+        message: `At ${speed.toFixed(0)} km/h, reducing to 110 km/h saves ~15%.`,
+        tip: 'Aerodynamic energy triples between 100 and 150 km/h.',
         savings: power * 0.15,
       };
     }
@@ -128,9 +131,9 @@ export default function RecommendationCard({
       return {
         type: 'warning',
         icon: Zap,
-        title: 'AccÃ©lÃ©ration modÃ©rÃ©e',
-        message: 'Anticipez le trafic pour une conduite plus fluide.',
-        tip: 'Chaque accÃ©lÃ©ration suivie d\'un freinage perd de l\'Ã©nergie.',
+        title: 'Moderate Acceleration',
+        message: 'Anticipate traffic for smoother driving.',
+        tip: 'Every acceleration followed by braking wastes energy.',
         savings: power * 0.1,
       };
     }
@@ -140,9 +143,9 @@ export default function RecommendationCard({
       return {
         type: 'info',
         icon: ArrowDown,
-        title: 'Descente dÃ©tectÃ©e',
-        message: 'Levez le pied pour activer la rÃ©gÃ©nÃ©ration.',
-        tip: 'Anticipez la prochaine montÃ©e ou feu rouge.',
+        title: 'Downhill Detected',
+        message: 'Lift off the accelerator to activate regeneration.',
+        tip: 'Anticipate the next uphill or traffic light.',
         savings: 5,
       };
     }
@@ -152,9 +155,9 @@ export default function RecommendationCard({
       return {
         type: 'success',
         icon: Leaf,
-        title: 'Conduite Ã©co-efficace',
-        message: `${efficiency.toFixed(1)} kWh/100km - Excellente efficacitÃ© !`,
-        tip: 'Continuez ainsi, vous Ãªtes dans la zone optimale.',
+        title: 'Eco-Efficient Driving',
+        message: `${efficiency.toFixed(1)} kWh/100km - Excellent efficiency!`,
+        tip: 'Keep going, you are in the optimal zone.',
         savings: 0,
       };
     }
@@ -164,9 +167,9 @@ export default function RecommendationCard({
       return {
         type: 'success',
         icon: ThumbsUp,
-        title: 'Conduite optimale',
-        message: 'Vitesse et accÃ©lÃ©ration dans la zone idÃ©ale.',
-        tip: 'Maintenez cette conduite fluide et anticipÃ©e.',
+        title: 'Optimal Driving',
+        message: 'Speed and acceleration in the ideal zone.',
+        tip: 'Maintain this smooth, anticipated driving style.',
         savings: 0,
       };
     }
@@ -175,34 +178,63 @@ export default function RecommendationCard({
     return {
       type: 'success',
       icon: Leaf,
-      title: 'PrÃªt Ã  rouler',
-      message: 'Le systÃ¨me analyse votre conduite en temps rÃ©el.',
-      tip: 'Les recommandations apparaÃ®tront selon les conditions.',
+      title: 'Ready to Drive',
+      message: 'The system analyzes your driving in real-time.',
+      tip: 'Recommendations will appear based on conditions.',
       savings: 0,
     };
   }, [power, speed, slope, acceleration, efficiency, temperature]);
   
-  // Track recent recommendations
-  useEffect(() => {
-    if (recommendation.title !== recentRecommendations[0]?.title) {
-      setRecentRecommendations(prev => [
-        { ...recommendation, timestamp: Date.now() },
-        ...prev.slice(0, 4)
-      ]);
-    }
-  }, [recommendation]);
-  
   const style = RECOMMENDATION_STYLES[recommendation.type];
   const Icon = recommendation.icon;
   
+  // Compact mode for top of screen - now includes tip!
+  if (compact) {
+    return (
+      <div className={`rounded-xl border-2 ${style.border} overflow-hidden shadow-lg ${style.glow}`}>
+        <div className={`bg-gradient-to-r ${style.bg} p-3`}>
+          <div className="flex items-center gap-3">
+            {/* Icon */}
+            <div className={`w-12 h-12 rounded-xl ${style.icon} flex items-center justify-center flex-shrink-0`}>
+              <Icon className="w-6 h-6" />
+            </div>
+            
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <h3 className={`font-bold ${style.text}`}>
+                  {recommendation.title}
+                </h3>
+                {recommendation.savings > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/10 ${style.text}`}>
+                    -{recommendation.savings.toFixed(0)} kW
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-200">
+                {recommendation.message}
+              </p>
+              {/* Tip - now visible in compact mode! */}
+              <div className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-400">
+                <span>💡</span>
+                <span className="line-clamp-1">{recommendation.tip}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Full mode with expandable details
   return (
-    <div className={`rounded-2xl border ${style.border} overflow-hidden`}>
+    <div className={`rounded-xl border-2 ${style.border} overflow-hidden shadow-lg ${style.glow}`}>
       {/* Main Recommendation */}
       <div 
         className={`bg-gradient-to-br ${style.bg} p-4 cursor-pointer`}
         onClick={() => setShowDetails(!showDetails)}
       >
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-3">
           {/* Icon */}
           <div className={`w-12 h-12 rounded-xl ${style.icon} flex items-center justify-center flex-shrink-0`}>
             <Icon className="w-6 h-6" />
@@ -215,7 +247,7 @@ export default function RecommendationCard({
                 {recommendation.title}
               </h3>
               {recommendation.savings > 0 && (
-                <span className="text-xs font-medium px-2 py-0.5 bg-white/10 rounded-full">
+                <span className={`text-xs font-bold px-2 py-0.5 bg-white/10 rounded-full ${style.text}`}>
                   -{recommendation.savings.toFixed(0)} kW
                 </span>
               )}
@@ -228,56 +260,33 @@ export default function RecommendationCard({
         
         {/* Expand indicator */}
         <div className="flex justify-center mt-2">
-          <div className={`w-8 h-1 rounded-full bg-white/20 ${showDetails ? 'opacity-0' : 'animate-pulse'}`} />
+          {showDetails ? (
+            <ChevronUp className="w-4 h-4 text-gray-500" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-gray-500 animate-bounce" />
+          )}
         </div>
       </div>
       
       {/* Details Section */}
       {showDetails && (
-        <div className="bg-black/20 p-4 space-y-4 animate-slide-up">
+        <div className="bg-black/30 p-3 space-y-3 animate-slide-up">
           {/* Tip */}
-          <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl">
-            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
-              ðŸ’¡
-            </div>
+          <div className="flex items-start gap-2 p-2 bg-white/5 rounded-lg">
+            <span className="text-lg">💡</span>
             <div>
-              <p className="text-xs font-semibold text-gray-400 mb-1">CONSEIL</p>
-              <p className="text-sm text-gray-300">{recommendation.tip}</p>
+              <p className="text-[10px] font-semibold text-gray-400 mb-0.5">TIP</p>
+              <p className="text-xs text-gray-300">{recommendation.tip}</p>
             </div>
           </div>
           
           {/* Current Stats */}
           <div className="grid grid-cols-4 gap-2">
-            <StatMini label="Puiss." value={`${power.toFixed(0)} kW`} />
-            <StatMini label="Vitesse" value={`${speed.toFixed(0)} km/h`} />
-            <StatMini label="Pente" value={`${slope >= 0 ? '+' : ''}${slope.toFixed(1)}%`} />
-            <StatMini label="AccÃ©l." value={`${acceleration.toFixed(1)} m/sÂ²`} />
+            <StatMini label="Power" value={`${power.toFixed(0)} kW`} />
+            <StatMini label="Speed" value={`${speed.toFixed(0)} km/h`} />
+            <StatMini label="Grade" value={`${slope >= 0 ? '+' : ''}${slope.toFixed(1)}%`} />
+            <StatMini label="Accel" value={`${acceleration.toFixed(1)} m/s²`} />
           </div>
-          
-          {/* Recent Recommendations */}
-          {recentRecommendations.length > 1 && (
-            <div>
-              <p className="text-xs font-semibold text-gray-500 mb-2">HISTORIQUE RÃ‰CENT</p>
-              <div className="space-y-1">
-                {recentRecommendations.slice(1, 4).map((rec, i) => (
-                  <div 
-                    key={i}
-                    className="flex items-center gap-2 text-xs text-gray-500"
-                  >
-                    <div className={`w-2 h-2 rounded-full bg-${
-                      rec.type === 'success' ? 'ev-green' :
-                      rec.type === 'warning' ? 'ev-orange' :
-                      rec.type === 'danger' ? 'ev-red' : 'ev-blue'
-                    }`} />
-                    <span className="truncate">{rec.title}</span>
-                    <span className="ml-auto opacity-50">
-                      {formatTimeAgo(rec.timestamp)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -292,11 +301,4 @@ function StatMini({ label, value }) {
       <p className="text-xs font-bold text-white">{value}</p>
     </div>
   );
-}
-
-// Format time ago
-function formatTimeAgo(timestamp) {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  return `${Math.floor(seconds / 60)}m`;
 }

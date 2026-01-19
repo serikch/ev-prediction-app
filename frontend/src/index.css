@@ -16,6 +16,7 @@
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html {
@@ -26,12 +27,14 @@ html {
 body {
   background: linear-gradient(180deg, #0a0a0a 0%, #050505 100%);
   min-height: 100vh;
+  min-height: 100dvh;
+  overscroll-behavior: none;
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -40,11 +43,7 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: #333333;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #444444;
+  border-radius: 2px;
 }
 
 /* Gauge animations */
@@ -74,22 +73,8 @@ body {
   }
 }
 
-@keyframes number-tick {
-  0% {
-    transform: translateY(-100%);
-    opacity: 0;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
 .animate-slide-up {
-  animation: slide-up 0.5s ease-out forwards;
+  animation: slide-up 0.3s ease-out forwards;
 }
 
 .animate-pulse-glow {
@@ -106,7 +91,7 @@ body {
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Card hover effect */
+/* Card styles */
 .ev-card {
   background: linear-gradient(145deg, #131313 0%, #0d0d0d 100%);
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -115,7 +100,6 @@ body {
 
 .ev-card:hover {
   border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 /* Gradient text */
@@ -132,36 +116,6 @@ body {
   height: 8px;
   border-radius: 50%;
   animation: pulse-glow 2s ease-in-out infinite;
-}
-
-.status-dot.success {
-  background: var(--color-ev-green);
-  color: var(--color-ev-green);
-}
-
-.status-dot.warning {
-  background: var(--color-ev-orange);
-  color: var(--color-ev-orange);
-}
-
-.status-dot.danger {
-  background: var(--color-ev-red);
-  color: var(--color-ev-red);
-}
-
-.status-dot.info {
-  background: var(--color-ev-blue);
-  color: var(--color-ev-blue);
-}
-
-/* Progress bar */
-.progress-bar {
-  background: linear-gradient(90deg, 
-    var(--color-ev-red) 0%, 
-    var(--color-ev-orange) 25%, 
-    var(--color-ev-yellow) 50%,
-    var(--color-ev-green) 100%
-  );
 }
 
 /* Battery indicator */
@@ -186,31 +140,6 @@ body {
   }
 }
 
-/* Mobile optimization */
-@media (max-width: 768px) {
-  .mobile-hidden {
-    display: none;
-  }
-  
-  .mobile-full {
-    width: 100%;
-  }
-}
-
-/* Touch feedback */
-@media (hover: none) {
-  .ev-card:active {
-    transform: scale(0.98);
-  }
-}
-
-/* Glassmorphism effect */
-.glass {
-  background: rgba(17, 17, 17, 0.8);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
 /* Number display */
 .number-display {
   font-variant-numeric: tabular-nums;
@@ -218,8 +147,64 @@ body {
 }
 
 /* Safe area padding for mobile */
-@supports (padding: env(safe-area-inset-bottom)) {
-  .safe-area-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.safe-area-x {
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+}
+
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0), 1rem);
+}
+
+/* Mobile touch optimizations */
+@media (hover: none) {
+  .ev-card:active {
+    transform: scale(0.98);
   }
+  
+  button:active {
+    transform: scale(0.96);
+  }
+}
+
+/* Prevent text selection on interactive elements */
+button, .ev-card {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Better slider styling for mobile */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-x;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  border: none;
 }

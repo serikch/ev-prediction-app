@@ -1,8 +1,8 @@
+/**
+ * StatusBadge - Status badge for header indicators
+ */
 import React from 'react';
 
-/**
- * Status badge for header indicators
- */
 export default function StatusBadge({ 
   status = 'info',
   icon,

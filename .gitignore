@@ -2,3 +2,4 @@
 backend/ml_models/*.pkl
 *.env
 frontend/node_modules/*
+*.DS_Store

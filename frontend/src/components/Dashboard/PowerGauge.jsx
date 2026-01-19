@@ -1,14 +1,17 @@
+/**
+ * PowerGauge - Power Consumption/Regeneration Display
+ * 
+ * FIXED VERSION:
+ * - All text in English
+ * - Horizontal bar showing -80kW (regen) to +150kW (consumption)
+ */
 import React from 'react';
 
-/**
- * Power consumption/regeneration gauge
- * Horizontal bar showing -80kW (regen) to +150kW (consumption)
- */
 export default function PowerGauge({ 
   power = 0, 
   maxPower = 150,
   maxRegen = -80,
-  efficiency = null, // kWh/100km
+  efficiency = null,
 }) {
   // Normalize power to percentage (-100 to 100)
   const getPercentage = () => {
@@ -34,23 +37,23 @@ export default function PowerGauge({
   const color = getColor();
 
   return (
-    <div className="ev-card rounded-2xl p-4">
+    <div className="ev-card rounded-xl p-3">
       {/* Header */}
-      <div className="flex justify-between items-center mb-3">
-        <span className="text-gray-400 text-sm uppercase tracking-wider">Puissance</span>
+      <div className="flex justify-between items-center mb-2">
+        <span className="text-gray-400 text-xs uppercase tracking-wider">Power</span>
         <div className="flex items-center gap-2">
           <span 
-            className="text-2xl font-bold number-display"
+            className="text-xl font-bold number-display"
             style={{ color }}
           >
             {power >= 0 ? '+' : ''}{power.toFixed(1)}
           </span>
-          <span className="text-gray-500 text-sm">kW</span>
+          <span className="text-gray-500 text-xs">kW</span>
         </div>
       </div>
 
       {/* Gauge bar */}
-      <div className="relative h-6 rounded-full bg-ev-darker overflow-hidden">
+      <div className="relative h-5 rounded-full bg-ev-darker overflow-hidden">
         {/* Center line */}
         <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gray-600 z-10" />
         
@@ -79,7 +82,7 @@ export default function PowerGauge({
         )}
 
         {/* Scale markers */}
-        <div className="absolute inset-0 flex justify-between items-center px-2 text-[10px] text-gray-500">
+        <div className="absolute inset-0 flex justify-between items-center px-2 text-[9px] text-gray-500">
           <span>{maxRegen}</span>
           <span>0</span>
           <span>+{maxPower}</span>
@@ -87,27 +90,27 @@ export default function PowerGauge({
       </div>
 
       {/* Footer with efficiency */}
-      <div className="flex justify-between items-center mt-3 text-xs">
-        <div className="flex items-center gap-2">
+      <div className="flex justify-between items-center mt-2 text-xs">
+        <div className="flex items-center gap-1.5">
           {isRegen ? (
             <>
-              <span className="text-blue-400">ðŸ”µ</span>
-              <span className="text-blue-400">RÃ©gÃ©nÃ©ration</span>
+              <span className="text-blue-400">🔋</span>
+              <span className="text-blue-400">Regeneration</span>
             </>
           ) : power > 50 ? (
             <>
-              <span className="text-orange-400">âš¡</span>
-              <span className="text-orange-400">Consommation Ã©levÃ©e</span>
+              <span className="text-orange-400">⚡</span>
+              <span className="text-orange-400">High consumption</span>
             </>
           ) : (
             <>
-              <span className="text-green-400">âš¡</span>
+              <span className="text-green-400">⚡</span>
               <span className="text-green-400">Normal</span>
             </>
           )}
         </div>
         
-        {efficiency !== null && (
+        {efficiency !== null && efficiency > 0 && (
           <div className="text-gray-400">
             <span className="font-mono">{efficiency.toFixed(1)}</span>
             <span className="ml-1">kWh/100km</span>
