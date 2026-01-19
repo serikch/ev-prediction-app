@@ -9,7 +9,94 @@ from typing import Optional, Any
 import requests
 import numpy as np
 
+# ============================================
+# SKLEARN 1.6+ COMPATIBLE CATBOOST WRAPPER
+# MUST BE DEFINED BEFORE pickle.load() !!!
+# ============================================
+from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.utils._tags import Tags, InputTags, TargetTags
+from catboost import CatBoostRegressor
+
+
+class CatBoostRegressorWrapper(BaseEstimator, RegressorMixin):
+    """
+    Wrapper around CatBoostRegressor to make it compatible with sklearn 1.6+.
+    sklearn 1.6+ requires __sklearn_tags__() which CatBoost doesn't implement.
+    This wrapper properly identifies as a regressor for VotingRegressor/StackingRegressor.
+    
+    THIS CLASS MUST BE IDENTICAL TO THE ONE USED DURING TRAINING!
+    """
+    
+    def __init__(self, iterations=500, learning_rate=0.1, depth=6, 
+                 l2_leaf_reg=3, random_state=42, verbose=False, thread_count=-1,
+                 **kwargs):
+        self.iterations = iterations
+        self.learning_rate = learning_rate
+        self.depth = depth
+        self.l2_leaf_reg = l2_leaf_reg
+        self.random_state = random_state
+        self.verbose = verbose
+        self.thread_count = thread_count
+        self.kwargs = kwargs
+        self._model = None
+    
+    def fit(self, X, y):
+        self._model = CatBoostRegressor(
+            iterations=self.iterations,
+            learning_rate=self.learning_rate,
+            depth=self.depth,
+            l2_leaf_reg=self.l2_leaf_reg,
+            random_state=self.random_state,
+            verbose=self.verbose,
+            thread_count=self.thread_count,
+            **self.kwargs
+        )
+        self._model.fit(X, y)
+        return self
+    
+    def predict(self, X):
+        return self._model.predict(X)
+    
+    @property
+    def feature_importances_(self):
+        return self._model.feature_importances_
+    
+    def get_params(self, deep=True):
+        return {
+            'iterations': self.iterations,
+            'learning_rate': self.learning_rate,
+            'depth': self.depth,
+            'l2_leaf_reg': self.l2_leaf_reg,
+            'random_state': self.random_state,
+            'verbose': self.verbose,
+            'thread_count': self.thread_count,
+            **self.kwargs
+        }
+    
+    def set_params(self, **params):
+        for key, value in params.items():
+            if key in ['iterations', 'learning_rate', 'depth', 'l2_leaf_reg', 
+                       'random_state', 'verbose', 'thread_count']:
+                setattr(self, key, value)
+            else:
+                self.kwargs[key] = value
+        return self
+    
+    def __sklearn_tags__(self):
+        """Required for sklearn 1.6+ compatibility with VotingRegressor/StackingRegressor."""
+        tags = Tags(
+            estimator_type="regressor",
+            target_tags=TargetTags(required=True),
+            input_tags=InputTags()
+        )
+        return tags
+
+
+# ============================================
+# LOGGING CONFIGURATION
+# ============================================
 logger = logging.getLogger(__name__)
+
 
 # ============================================
 # CONFIGURATION DU MODÈLE
@@ -118,13 +205,24 @@ def load_model() -> Optional[Any]:
         logger.info(f"📂 Chargement du modèle: {MODEL_PATH}...")
         
         with open(MODEL_PATH, 'rb') as f:
-            _model = pickle.load(f)
+            model_data = pickle.load(f)
         
-        logger.info(f"✅ Modèle chargé: {type(_model).__name__}")
+        # Le fichier contient un dict avec 'model', 'features', etc.
+        if isinstance(model_data, dict):
+            _model = model_data.get('model')
+            features = model_data.get('features', [])
+            logger.info(f"✅ Modèle chargé: {type(_model).__name__}")
+            logger.info(f"   Features attendues: {len(features)}")
+            logger.info(f"   R²: {model_data.get('r2', 'N/A')}")
+            logger.info(f"   MAE: {model_data.get('mae', 'N/A')} kW")
+        else:
+            # Si c'est directement le modèle
+            _model = model_data
+            logger.info(f"✅ Modèle chargé: {type(_model).__name__}")
         
         # Log info modèle
         if hasattr(_model, 'feature_names_in_'):
-            logger.info(f"   Features attendues: {len(_model.feature_names_in_)}")
+            logger.info(f"   Features du modèle: {len(_model.feature_names_in_)}")
         if hasattr(_model, 'n_features_in_'):
             logger.info(f"   Nombre de features: {_model.n_features_in_}")
             

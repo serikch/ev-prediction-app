@@ -1,10 +1,10 @@
 # FastAPI et serveur
-fastapi>=0.109.0,<1.0.0
-uvicorn[standard]>=0.27.0,<1.0.0
-python-multipart>=0.0.6,<1.0.0
-pydantic>=2.6.0,<3.0.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+pydantic>=2.8.0
 
-# Data science - versions compatibles
+# Data science - TOUTES les dépendances du StackingEnsemble
 numpy>=1.26.0,<2.0.0
 scikit-learn>=1.4.0
 xgboost>=2.0.0
@@ -12,8 +12,8 @@ lightgbm>=4.0.0
 catboost>=1.2.0
 
 # HTTP clients
-httpx>=0.26.0,<1.0.0
-requests>=2.31.0,<3.0.0
+httpx>=0.27.0
+requests>=2.32.0
 
 # Utils
-python-dotenv>=1.0.0,<2.0.0
+python-dotenv>=1.0.0
