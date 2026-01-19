@@ -1,21 +1,20 @@
 """
 ML Model Loader - Télécharge et charge le modèle depuis GitHub Releases
 
-VERSION CORRIGÉE: Pas de faux modules, juste redirection intelligente des classes
+FIXED: Utilise JOBLIB (pas pickle) car le modèle a été sauvegardé avec joblib.dump()
 """
 import os
 import sys
 import logging
-import pickle
+import joblib  # ← JOBLIB, pas pickle!
 from pathlib import Path
 from typing import Optional, Any
 import requests
 import numpy as np
 
 # ============================================
-# IMPORT ALL DEPENDENCIES FIRST
+# IMPORT ALL DEPENDENCIES
 # ============================================
-import sklearn
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils._tags import Tags, InputTags, TargetTags
 from sklearn.linear_model import Ridge
@@ -26,13 +25,8 @@ from sklearn.ensemble import (
 )
 from sklearn.preprocessing import StandardScaler
 
-import xgboost as xgb
 from xgboost import XGBRegressor
-
-import lightgbm as lgb
 from lightgbm import LGBMRegressor
-
-import catboost
 from catboost import CatBoostRegressor
 
 # ============================================
@@ -109,45 +103,20 @@ class CatBoostRegressorWrapper(BaseEstimator, RegressorMixin):
 
 # ============================================
 # INJECT CatBoostRegressorWrapper INTO __main__
-# This is the ONLY class that needs injection
 # ============================================
 import __main__
 __main__.CatBoostRegressorWrapper = CatBoostRegressorWrapper
 
 
 # ============================================
-# CUSTOM UNPICKLER - MINIMAL INTERVENTION
-# Only redirect __main__ lookups, let everything else pass through
-# ============================================
-class FlexibleUnpickler(pickle.Unpickler):
-    """
-    Custom unpickler that ONLY handles __main__ references.
-    Everything else uses default behavior.
-    """
-    
-    def find_class(self, module, name):
-        # ONLY intercept __main__ references
-        if module == '__main__':
-            if name == 'CatBoostRegressorWrapper':
-                return CatBoostRegressorWrapper
-            # Try to get from actual __main__
-            if hasattr(__main__, name):
-                return getattr(__main__, name)
-        
-        # For everything else, use default behavior
-        return super().find_class(module, name)
-
-
-# ============================================
-# LOGGING CONFIGURATION
+# LOGGING
 # ============================================
 logger = logging.getLogger(__name__)
 
 
 # ============================================
-# CONFIGURATION DU MODÈLE
+# CONFIGURATION
 # ============================================
-
 MODEL_DIR = Path(__file__).parent.parent.parent / "ml_models"
 MODEL_FILENAME = "model.pkl"
 MODEL_PATH = MODEL_DIR / MODEL_FILENAME
@@ -177,7 +146,7 @@ FEATURE_ORDER = [
 
 def download_model() -> bool:
     """Télécharge le modèle ML depuis GitHub Releases"""
-    logger.info(f"📥 Téléchargement du modèle depuis GitHub Releases...")
+    logger.info(f"📥 Téléchargement du modèle...")
     logger.info(f"   URL: {MODEL_URL}")
     
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -209,7 +178,7 @@ def download_model() -> bool:
 
 
 def load_model() -> Optional[Any]:
-    """Charge le modèle ML (télécharge d'abord si nécessaire)"""
+    """Charge le modèle ML avec JOBLIB"""
     global _model
     
     if _model is not None:
@@ -224,11 +193,10 @@ def load_model() -> Optional[Any]:
             return None
     
     try:
-        logger.info(f"📂 Chargement du modèle: {MODEL_PATH}...")
+        logger.info(f"📂 Chargement du modèle avec joblib: {MODEL_PATH}...")
         
-        # Use custom unpickler to handle __main__ references
-        with open(MODEL_PATH, 'rb') as f:
-            model_data = FlexibleUnpickler(f).load()
+        # JOBLIB.LOAD - pas pickle!
+        model_data = joblib.load(MODEL_PATH)
         
         if isinstance(model_data, dict):
             _model = model_data.get('model')
