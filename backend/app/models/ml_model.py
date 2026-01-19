@@ -1,5 +1,7 @@
 """
 ML Model Loader - Télécharge et charge le modèle depuis GitHub Releases
+
+BULLETPROOF VERSION: Gère tous les problèmes d'import pickle possibles
 """
 import os
 import sys
@@ -11,21 +13,43 @@ import requests
 import numpy as np
 
 # ============================================
-# SKLEARN 1.6+ COMPATIBLE CATBOOST WRAPPER
-# MUST BE DEFINED BEFORE pickle.load() !!!
+# IMPORT ALL SKLEARN MODULES THAT MIGHT BE IN THE PICKLE
 # ============================================
+import sklearn
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils._tags import Tags, InputTags, TargetTags
+from sklearn.linear_model import Ridge, LinearRegression, Lasso, ElasticNet
+from sklearn.ensemble import (
+    RandomForestRegressor, 
+    GradientBoostingRegressor, 
+    StackingRegressor, 
+    VotingRegressor,
+    AdaBoostRegressor,
+    BaggingRegressor,
+    ExtraTreesRegressor
+)
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+from sklearn.model_selection import cross_val_score, KFold, train_test_split
+
+# ============================================
+# IMPORT ALL ML LIBRARIES
+# ============================================
+import xgboost as xgb
+from xgboost import XGBRegressor
+
+import lightgbm as lgb
+from lightgbm import LGBMRegressor
+
+import catboost
 from catboost import CatBoostRegressor
 
-
+# ============================================
+# SKLEARN 1.6+ COMPATIBLE CATBOOST WRAPPER
+# ============================================
 class CatBoostRegressorWrapper(BaseEstimator, RegressorMixin):
     """
     Wrapper around CatBoostRegressor to make it compatible with sklearn 1.6+.
-    sklearn 1.6+ requires __sklearn_tags__() which CatBoost doesn't implement.
-    This wrapper properly identifies as a regressor for VotingRegressor/StackingRegressor.
-    
-    THIS CLASS MUST BE IDENTICAL TO THE ONE USED DURING TRAINING!
     """
     
     def __init__(self, iterations=500, learning_rate=0.1, depth=6, 
@@ -84,7 +108,6 @@ class CatBoostRegressorWrapper(BaseEstimator, RegressorMixin):
         return self
     
     def __sklearn_tags__(self):
-        """Required for sklearn 1.6+ compatibility with VotingRegressor/StackingRegressor."""
         tags = Tags(
             estimator_type="regressor",
             target_tags=TargetTags(required=True),
@@ -94,13 +117,85 @@ class CatBoostRegressorWrapper(BaseEstimator, RegressorMixin):
 
 
 # ============================================
-# CRITICAL: Inject class into __main__ for pickle
+# INJECT ALL CLASSES INTO __main__ AND sys.modules
+# This fixes pickle deserialization issues
 # ============================================
-# When the model was trained, CatBoostRegressorWrapper was defined in __main__
-# pickle saved the reference as "__main__.CatBoostRegressorWrapper"
-# Now we need to make it available in __main__ for unpickling to work
 import __main__
+import types
+
+# Inject CatBoostRegressorWrapper
 __main__.CatBoostRegressorWrapper = CatBoostRegressorWrapper
+
+# Inject sklearn classes that might have been pickled with wrong module path
+__main__.StackingRegressor = StackingRegressor
+__main__.VotingRegressor = VotingRegressor
+__main__.RandomForestRegressor = RandomForestRegressor
+__main__.Ridge = Ridge
+__main__.StandardScaler = StandardScaler
+
+# Create fake modules for common pickle issues
+for name, cls in [
+    ('StackingRegressor', StackingRegressor),
+    ('VotingRegressor', VotingRegressor),
+    ('RandomForestRegressor', RandomForestRegressor),
+    ('XGBRegressor', XGBRegressor),
+    ('LGBMRegressor', LGBMRegressor),
+    ('CatBoostRegressor', CatBoostRegressor),
+    ('CatBoostRegressorWrapper', CatBoostRegressorWrapper),
+    ('Ridge', Ridge),
+]:
+    if name not in sys.modules:
+        fake_module = types.ModuleType(name)
+        setattr(fake_module, name, cls)
+        sys.modules[name] = fake_module
+
+
+# ============================================
+# CUSTOM UNPICKLER THAT HANDLES MODULE ISSUES
+# ============================================
+class FlexibleUnpickler(pickle.Unpickler):
+    """
+    Custom unpickler that redirects module lookups to handle
+    cases where classes were pickled from __main__ or with wrong paths.
+    """
+    
+    CLASS_MAP = {
+        'CatBoostRegressorWrapper': CatBoostRegressorWrapper,
+        'StackingRegressor': StackingRegressor,
+        'VotingRegressor': VotingRegressor,
+        'RandomForestRegressor': RandomForestRegressor,
+        'XGBRegressor': XGBRegressor,
+        'LGBMRegressor': LGBMRegressor,
+        'CatBoostRegressor': CatBoostRegressor,
+        'Ridge': Ridge,
+        'StandardScaler': StandardScaler,
+    }
+    
+    MODULE_MAP = {
+        'sklearn.ensemble._stacking': 'sklearn.ensemble',
+        'sklearn.ensemble._voting': 'sklearn.ensemble',
+        'sklearn.ensemble._forest': 'sklearn.ensemble',
+    }
+    
+    def find_class(self, module, name):
+        # First, try our class map for known classes
+        if name in self.CLASS_MAP:
+            return self.CLASS_MAP[name]
+        
+        # Handle module redirects
+        if module in self.MODULE_MAP:
+            module = self.MODULE_MAP[module]
+        
+        # Handle __main__ references
+        if module == '__main__':
+            if name in self.CLASS_MAP:
+                return self.CLASS_MAP[name]
+            # Try to get from current __main__
+            if hasattr(__main__, name):
+                return getattr(__main__, name)
+        
+        # Default behavior
+        return super().find_class(module, name)
 
 
 # ============================================
@@ -117,50 +212,31 @@ MODEL_DIR = Path(__file__).parent.parent.parent / "ml_models"
 MODEL_FILENAME = "model.pkl"
 MODEL_PATH = MODEL_DIR / MODEL_FILENAME
 
-# URL du modèle sur GitHub Releases
 MODEL_URL = os.getenv(
     "MODEL_URL",
     "https://github.com/serikch/ev-prediction-app/releases/download/v1.0.0/top1_model_bev1_without_battery_features_stackingensemble.pkl"
 )
 
-# Instance globale du modèle
 _model: Optional[Any] = None
 
-# Ordre des 36 features attendues par le modèle
 FEATURE_ORDER = [
-    # Base features (11)
     'speed_kmh', 'speed2', 'speed3', 'acceleration', 'slope',
     'slope_abs', 'elevation_diff', 'VCFRONT_tempAmbient', 'temp_range',
     'SOCave292', 'soc_delta',
-    
-    # Interaction features (6)
     'speed_x_slope', 'speed2_x_slope', 'speed_x_slope_abs',
     'accel_x_speed', 'accel_x_speed2', 'total_effort',
-    
-    # Rolling features (7)
     'speed_roll_mean_10', 'speed_roll_std_10', 'speed_roll_max_10',
     'speed_roll_min_10', 'accel_roll_mean_5', 'accel_roll_std_5',
     'slope_roll_mean_20',
-    
-    # Binary state features (4)
     'is_accelerating', 'is_braking', 'is_coasting', 'regen_potential',
-    
-    # Cumulative features (3)
     'cumul_elevation_gain', 'cumul_elevation_loss', 'time_since_stop',
-    
-    # Categorical features (3)
     'speed_regime', 'slope_category', 'temp_category',
-    
-    # Ratio features (2)
     'accel_per_speed', 'slope_per_speed',
 ]
 
 
 def download_model() -> bool:
-    """
-    Télécharge le modèle ML depuis GitHub Releases
-    Returns True si succès, False sinon
-    """
+    """Télécharge le modèle ML depuis GitHub Releases"""
     logger.info(f"📥 Téléchargement du modèle depuis GitHub Releases...")
     logger.info(f"   URL: {MODEL_URL}")
     
@@ -180,7 +256,6 @@ def download_model() -> bool:
                 f.write(chunk)
                 downloaded += len(chunk)
                 
-                # Log progress tous les 10%
                 if total_size > 0 and downloaded % (total_size // 10) < 8192:
                     progress = (downloaded / total_size) * 100
                     logger.info(f"   Progression: {progress:.0f}%")
@@ -194,16 +269,13 @@ def download_model() -> bool:
 
 
 def load_model() -> Optional[Any]:
-    """
-    Charge le modèle ML (télécharge d'abord si nécessaire)
-    """
+    """Charge le modèle ML (télécharge d'abord si nécessaire)"""
     global _model
     
     if _model is not None:
         logger.info("✅ Modèle déjà en mémoire")
         return _model
     
-    # Vérifier si le modèle existe localement
     if not MODEL_PATH.exists():
         logger.info("📦 Modèle non trouvé, téléchargement...")
         success = download_model()
@@ -211,14 +283,13 @@ def load_model() -> Optional[Any]:
             logger.warning("⚠️ Impossible de télécharger le modèle")
             return None
     
-    # Charger le modèle
     try:
         logger.info(f"📂 Chargement du modèle: {MODEL_PATH}...")
         
+        # Use custom unpickler to handle module issues
         with open(MODEL_PATH, 'rb') as f:
-            model_data = pickle.load(f)
+            model_data = FlexibleUnpickler(f).load()
         
-        # Le fichier contient un dict avec 'model', 'features', etc.
         if isinstance(model_data, dict):
             _model = model_data.get('model')
             features = model_data.get('features', [])
@@ -227,11 +298,9 @@ def load_model() -> Optional[Any]:
             logger.info(f"   R²: {model_data.get('r2', 'N/A')}")
             logger.info(f"   MAE: {model_data.get('mae', 'N/A')} kW")
         else:
-            # Si c'est directement le modèle
             _model = model_data
             logger.info(f"✅ Modèle chargé: {type(_model).__name__}")
         
-        # Log info modèle
         if hasattr(_model, 'feature_names_in_'):
             logger.info(f"   Features du modèle: {len(_model.feature_names_in_)}")
         if hasattr(_model, 'n_features_in_'):
@@ -241,6 +310,8 @@ def load_model() -> Optional[Any]:
         
     except Exception as e:
         logger.error(f"❌ Échec chargement modèle: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return None
 
 
@@ -250,15 +321,7 @@ def get_model() -> Optional[Any]:
 
 
 def predict_with_model(features: dict) -> Optional[float]:
-    """
-    Fait une prédiction avec le modèle ML
-    
-    Args:
-        features: Dictionnaire avec les 36 features
-        
-    Returns:
-        Puissance batterie prédite en kW, ou None si modèle indisponible
-    """
+    """Fait une prédiction avec le modèle ML"""
     global _model
     
     if _model is None:
@@ -266,13 +329,11 @@ def predict_with_model(features: dict) -> Optional[float]:
         return None
     
     try:
-        # Utiliser l'ordre des features du modèle si disponible
         if hasattr(_model, 'feature_names_in_'):
             expected_features = list(_model.feature_names_in_)
         else:
             expected_features = FEATURE_ORDER
         
-        # Construire le tableau de features dans le bon ordre
         feature_values = []
         missing_features = []
         
@@ -291,10 +352,7 @@ def predict_with_model(features: dict) -> Optional[float]:
         if missing_features:
             logger.warning(f"⚠️ {len(missing_features)} features manquantes: {missing_features[:3]}...")
         
-        # Convertir en numpy array
         X = np.array(feature_values, dtype=np.float64).reshape(1, -1)
-        
-        # Prédiction
         prediction = _model.predict(X)[0]
         
         speed = features.get('speed_kmh', 0)
