@@ -247,7 +247,7 @@ async def predict_power(request: PredictionRequest):
     if model is not None:
         power_kw = predict_with_model(features_dict)
         if power_kw is not None:
-            model_used = "ML (XGBoost/Stacking)"
+            model_used = "ML (XGBoost)"
             logger.info(f"✅ Prédiction ML: {power_kw:.2f} kW")
     
     # Fallback sur modèle physique
