@@ -1,9 +1,19 @@
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-python-multipart==0.0.6
-pydantic==2.5.3
-numpy==1.26.3
-httpx==0.26.0
-requests==2.31.0
-scikit-learn==1.4.0
-python-dotenv==1.0.0
+# FastAPI et serveur
+fastapi>=0.109.0,<1.0.0
+uvicorn[standard]>=0.27.0,<1.0.0
+python-multipart>=0.0.6,<1.0.0
+pydantic>=2.6.0,<3.0.0
+
+# Data science - versions compatibles
+numpy>=1.26.0,<2.0.0
+scikit-learn>=1.4.0
+xgboost>=2.0.0
+lightgbm>=4.0.0
+catboost>=1.2.0
+
+# HTTP clients
+httpx>=0.26.0,<1.0.0
+requests>=2.31.0,<3.0.0
+
+# Utils
+python-dotenv>=1.0.0,<2.0.0
