@@ -1,10 +1,12 @@
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ev-prediction-app.onrender.com';
 
 /**
  * Circular buffer for storing historical data points
  */
 class DataBuffer {
-  constructor(maxSize = 20) {
+  constructor(maxSize = 30) {
     this.maxSize = maxSize;
     this.data = [];
   }
@@ -17,7 +19,7 @@ class DataBuffer {
   }
 
   getStats(key, window) {
-    const values = this.data.slice(-window).map(d => d[key]).filter(v => v !== undefined);
+    const values = this.data.slice(-window).map(d => d[key]).filter(v => v !== undefined && !isNaN(v));
     if (values.length === 0) return { mean: 0, std: 0, max: 0, min: 0 };
     
     const mean = values.reduce((a, b) => a + b, 0) / values.length;
@@ -37,8 +39,58 @@ class DataBuffer {
     return this.data.length > 0 ? this.data[this.data.length - 1] : null;
   }
 
+  getLastN(n) {
+    return this.data.slice(-n);
+  }
+
   clear() {
     this.data = [];
+  }
+}
+
+/**
+ * Calculate Haversine distance between two GPS points (meters)
+ */
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Earth radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Fetch elevation from backend API (uses eudem25m - precise terrain data)
+ */
+async function fetchElevation(latitude, longitude) {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    const response = await fetch(
+      `${API_BASE_URL}/api/elevation/single?latitude=${latitude}&longitude=${longitude}`,
+      { signal: controller.signal }
+    );
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      console.warn('Elevation API error:', response.status);
+      return null;
+    }
+    
+    const data = await response.json();
+    return data.elevation;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.warn('Elevation API timeout');
+    } else {
+      console.warn('Failed to fetch elevation:', error.message);
+    }
+    return null;
   }
 }
 
@@ -75,7 +127,20 @@ function getTempCategory(temp) {
 }
 
 /**
+ * Exponential moving average for smoothing
+ */
+function ema(newValue, prevEma, alpha = 0.3) {
+  if (prevEma === null || prevEma === undefined) return newValue;
+  return alpha * newValue + (1 - alpha) * prevEma;
+}
+
+/**
  * Hook for calculating ML features from sensor data
+ * 
+ * FIXED VERSION with:
+ * - Elevation API integration (precise terrain elevation from eudem25m)
+ * - Slope smoothing to reduce GPS noise
+ * - Proper distance calculation using Haversine formula
  * 
  * @param {Object} options
  * @param {Object} options.gpsData - Current GPS position data
@@ -83,13 +148,19 @@ function getTempCategory(temp) {
  * @param {boolean} options.enabled - Whether calculation is enabled
  */
 export function useFeatureCalculator({ gpsData, config, enabled } = {}) {
-  const bufferRef = useRef(new DataBuffer(20));
+  const bufferRef = useRef(new DataBuffer(30));
+  const elevationCacheRef = useRef(new Map()); // Cache: "lat,lon" -> elevation
+  const lastElevationRef = useRef(null);
+  const smoothedSlopeRef = useRef(0);
+  const pendingElevationRef = useRef(false);
+  
   const tripStateRef = useRef({
     cumulElevationGain: 0,
     cumulElevationLoss: 0,
     timeSinceStop: 0,
     lastSoc: 80,
     startTime: null,
+    totalDistance: 0,
   });
 
   const [features, setFeatures] = useState(null);
@@ -98,6 +169,8 @@ export function useFeatureCalculator({ gpsData, config, enabled } = {}) {
     cumulElevationLoss: 0,
     timeSinceStop: 0,
     duration: 0,
+    totalDistance: 0,
+    elevationSource: 'none',
   });
 
   /**
@@ -105,12 +178,17 @@ export function useFeatureCalculator({ gpsData, config, enabled } = {}) {
    */
   const reset = useCallback((initialSoc = 80) => {
     bufferRef.current.clear();
+    elevationCacheRef.current.clear();
+    lastElevationRef.current = null;
+    smoothedSlopeRef.current = 0;
+    pendingElevationRef.current = false;
     tripStateRef.current = {
       cumulElevationGain: 0,
       cumulElevationLoss: 0,
       timeSinceStop: 0,
       lastSoc: initialSoc,
       startTime: null,
+      totalDistance: 0,
     };
     setFeatures(null);
     setStats({
@@ -118,13 +196,63 @@ export function useFeatureCalculator({ gpsData, config, enabled } = {}) {
       cumulElevationLoss: 0,
       timeSinceStop: 0,
       duration: 0,
+      totalDistance: 0,
+      elevationSource: 'none',
     });
+  }, []);
+
+  /**
+   * Get elevation with caching
+   */
+  const getElevation = useCallback(async (latitude, longitude, gpsAltitude) => {
+    // Round coordinates to ~10m precision for caching
+    const cacheKey = `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
+    
+    // Check cache first
+    if (elevationCacheRef.current.has(cacheKey)) {
+      return { elevation: elevationCacheRef.current.get(cacheKey), source: 'cache' };
+    }
+    
+    // Don't spam API - if already pending, use fallback
+    if (pendingElevationRef.current) {
+      if (lastElevationRef.current !== null) {
+        return { elevation: lastElevationRef.current, source: 'pending' };
+      }
+      return { elevation: gpsAltitude || 0, source: 'gps' };
+    }
+    
+    // Fetch from API
+    pendingElevationRef.current = true;
+    const apiElevation = await fetchElevation(latitude, longitude);
+    pendingElevationRef.current = false;
+    
+    if (apiElevation !== null) {
+      elevationCacheRef.current.set(cacheKey, apiElevation);
+      // Keep cache small (max 200 entries)
+      if (elevationCacheRef.current.size > 200) {
+        const firstKey = elevationCacheRef.current.keys().next().value;
+        elevationCacheRef.current.delete(firstKey);
+      }
+      return { elevation: apiElevation, source: 'api' };
+    }
+    
+    // Fallback to GPS altitude (less accurate but better than nothing)
+    if (gpsAltitude !== null && gpsAltitude !== undefined) {
+      return { elevation: gpsAltitude, source: 'gps' };
+    }
+    
+    // Last resort: use last known elevation
+    if (lastElevationRef.current !== null) {
+      return { elevation: lastElevationRef.current, source: 'last' };
+    }
+    
+    return { elevation: 0, source: 'default' };
   }, []);
 
   /**
    * Calculate all 36 features from current sensor data
    */
-  const calculateFeatures = useCallback((sensorData) => {
+  const calculateFeatures = useCallback(async (sensorData) => {
     const buffer = bufferRef.current;
     const tripState = tripStateRef.current;
     const lastPoint = buffer.getLast();
@@ -133,7 +261,7 @@ export function useFeatureCalculator({ gpsData, config, enabled } = {}) {
       speed = 0,
       latitude,
       longitude,
-      elevation = 0,
+      gpsAltitude = null,
       timestamp,
       soc = 80,
       ambientTemp = 15,
@@ -144,26 +272,50 @@ export function useFeatureCalculator({ gpsData, config, enabled } = {}) {
       tripState.startTime = timestamp;
     }
 
+    // Get elevation from API (or cache/fallback)
+    const { elevation, source: elevationSource } = await getElevation(latitude, longitude, gpsAltitude);
+    
     // Calculate time delta
     const dt = lastPoint ? Math.max(0.1, Math.min(10, timestamp - lastPoint.timestamp)) : 1;
 
-    // Calculate acceleration (m/sÂ²)
+    // Calculate acceleration (m/s²) from speed change
     const speedMs = speed / 3.6;
     const prevSpeedMs = lastPoint ? lastPoint.speed / 3.6 : speedMs;
-    const acceleration = (speedMs - prevSpeedMs) / dt;
+    const rawAcceleration = (speedMs - prevSpeedMs) / dt;
+    // Clamp acceleration to realistic values
+    const acceleration = Math.max(-5, Math.min(5, rawAcceleration));
 
-    // Calculate elevation difference and slope
-    const prevElevation = lastPoint ? lastPoint.elevation : elevation;
-    const elevationDiff = elevation - prevElevation;
-    
-    // Estimate distance from speed
-    const avgSpeedMs = (speedMs + prevSpeedMs) / 2;
-    const distanceM = avgSpeedMs * dt;
-    
-    let slope = 0;
-    if (distanceM > 1) {
-      slope = Math.max(-20, Math.min(20, (elevationDiff / distanceM) * 100));
+    // Calculate distance using Haversine (more accurate than speed × time)
+    let distanceM = 0;
+    if (lastPoint && lastPoint.latitude && lastPoint.longitude) {
+      distanceM = haversineDistance(lastPoint.latitude, lastPoint.longitude, latitude, longitude);
+      // Sanity check: max 50m per second at 180 km/h
+      distanceM = Math.min(distanceM, 50);
+    } else {
+      // Fallback: estimate from speed
+      distanceM = speedMs * dt;
     }
+    
+    tripState.totalDistance += distanceM;
+
+    // Calculate slope from elevation difference
+    const prevElevation = lastElevationRef.current !== null ? lastElevationRef.current : elevation;
+    const elevationDiff = elevation - prevElevation;
+    lastElevationRef.current = elevation;
+    
+    // Raw slope calculation (only if we moved enough)
+    let rawSlope = 0;
+    if (distanceM > 1.0 && speed > 2) { // Need at least 1m movement and some speed
+      rawSlope = (elevationDiff / distanceM) * 100; // Percent grade
+    }
+    
+    // Clamp extreme values (roads rarely exceed 15%)
+    rawSlope = Math.max(-20, Math.min(20, rawSlope));
+    
+    // Apply exponential smoothing to reduce noise
+    // Alpha = 0.15 means ~7 seconds to reach 63% of new value
+    smoothedSlopeRef.current = ema(rawSlope, smoothedSlopeRef.current, 0.15);
+    const slope = smoothedSlopeRef.current;
 
     // Add to buffer
     buffer.add({
@@ -173,6 +325,9 @@ export function useFeatureCalculator({ gpsData, config, enabled } = {}) {
       slope,
       elevation,
       soc,
+      latitude,
+      longitude,
+      distanceM,
     });
 
     // Get rolling statistics
@@ -180,10 +335,10 @@ export function useFeatureCalculator({ gpsData, config, enabled } = {}) {
     const accelStats5 = buffer.getStats('acceleration', 5);
     const slopeStats20 = buffer.getStats('slope', 20);
 
-    // Update cumulative elevation
-    if (elevationDiff > 0) {
+    // Update cumulative elevation (only count significant changes > 0.3m)
+    if (elevationDiff > 0.3) {
       tripState.cumulElevationGain += elevationDiff;
-    } else {
+    } else if (elevationDiff < -0.3) {
       tripState.cumulElevationLoss += Math.abs(elevationDiff);
     }
 
@@ -198,7 +353,7 @@ export function useFeatureCalculator({ gpsData, config, enabled } = {}) {
     const socDelta = soc - tripState.lastSoc;
     tripState.lastSoc = soc;
 
-    // Calculate all 36 features
+    // Calculate all 36 features for ML model
     const computed = {
       // Base (11)
       speed_kmh: speed,
@@ -251,19 +406,21 @@ export function useFeatureCalculator({ gpsData, config, enabled } = {}) {
       slope_per_speed: slope / (speed + 1),
     };
 
-    // Update stats
+    // Update stats for display
     setStats({
       cumulElevationGain: tripState.cumulElevationGain,
       cumulElevationLoss: tripState.cumulElevationLoss,
       timeSinceStop: tripState.timeSinceStop,
+      totalDistance: tripState.totalDistance,
       duration: tripState.startTime 
         ? (Date.now() / 1000) - tripState.startTime 
         : 0,
+      elevationSource,
     });
 
     setFeatures(computed);
     return computed;
-  }, []);
+  }, [getElevation]);
 
   // Auto-calculate features when gpsData changes
   useEffect(() => {
@@ -273,12 +430,13 @@ export function useFeatureCalculator({ gpsData, config, enabled } = {}) {
       speed: gpsData.speed || 0,
       latitude: gpsData.latitude,
       longitude: gpsData.longitude,
-      elevation: gpsData.altitude || 0,
+      gpsAltitude: gpsData.altitude || null, // Keep GPS altitude as fallback
       timestamp: gpsData.timestamp || Date.now() / 1000,
       soc: config?.soc || 80,
       ambientTemp: config?.temperature || 15,
     };
     
+    // Call async function
     calculateFeatures(sensorData);
   }, [gpsData, config, enabled, calculateFeatures]);
 

@@ -479,9 +479,10 @@ export default function App() {
               <div>Vehicle: {tripConfig?.vehicle || 'BEV2'}</div>
               <div>Speed: {currentSpeed.toFixed(1)} km/h</div>
               <div>Power: {currentPower.toFixed(1)} kW</div>
+              <div>Slope: {currentSlope.toFixed(1)}%</div>
               <div>SOC: {currentSOC.toFixed(1)}%</div>
               <div>Model: {prediction?.model_used || 'N/A'}</div>
-              <div>API: ev-prediction-app.onrender.com</div>
+              <div>Elevation: {stats?.elevationSource || 'N/A'}</div>
               <div>Charts: {powerHistory.length} pts</div>
             </div>
           </div>
