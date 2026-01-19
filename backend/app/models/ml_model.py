@@ -1,7 +1,7 @@
 """
 ML Model Loader - Télécharge et charge le modèle depuis GitHub Releases
 
-BULLETPROOF VERSION: Gère tous les problèmes d'import pickle possibles
+VERSION CORRIGÉE: Pas de faux modules, juste redirection intelligente des classes
 """
 import os
 import sys
@@ -13,28 +13,19 @@ import requests
 import numpy as np
 
 # ============================================
-# IMPORT ALL SKLEARN MODULES THAT MIGHT BE IN THE PICKLE
+# IMPORT ALL DEPENDENCIES FIRST
 # ============================================
 import sklearn
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils._tags import Tags, InputTags, TargetTags
-from sklearn.linear_model import Ridge, LinearRegression, Lasso, ElasticNet
+from sklearn.linear_model import Ridge
 from sklearn.ensemble import (
     RandomForestRegressor, 
-    GradientBoostingRegressor, 
     StackingRegressor, 
     VotingRegressor,
-    AdaBoostRegressor,
-    BaggingRegressor,
-    ExtraTreesRegressor
 )
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
-from sklearn.model_selection import cross_val_score, KFold, train_test_split
+from sklearn.preprocessing import StandardScaler
 
-# ============================================
-# IMPORT ALL ML LIBRARIES
-# ============================================
 import xgboost as xgb
 from xgboost import XGBRegressor
 
@@ -117,84 +108,33 @@ class CatBoostRegressorWrapper(BaseEstimator, RegressorMixin):
 
 
 # ============================================
-# INJECT ALL CLASSES INTO __main__ AND sys.modules
-# This fixes pickle deserialization issues
+# INJECT CatBoostRegressorWrapper INTO __main__
+# This is the ONLY class that needs injection
 # ============================================
 import __main__
-import types
-
-# Inject CatBoostRegressorWrapper
 __main__.CatBoostRegressorWrapper = CatBoostRegressorWrapper
-
-# Inject sklearn classes that might have been pickled with wrong module path
-__main__.StackingRegressor = StackingRegressor
-__main__.VotingRegressor = VotingRegressor
-__main__.RandomForestRegressor = RandomForestRegressor
-__main__.Ridge = Ridge
-__main__.StandardScaler = StandardScaler
-
-# Create fake modules for common pickle issues
-for name, cls in [
-    ('StackingRegressor', StackingRegressor),
-    ('VotingRegressor', VotingRegressor),
-    ('RandomForestRegressor', RandomForestRegressor),
-    ('XGBRegressor', XGBRegressor),
-    ('LGBMRegressor', LGBMRegressor),
-    ('CatBoostRegressor', CatBoostRegressor),
-    ('CatBoostRegressorWrapper', CatBoostRegressorWrapper),
-    ('Ridge', Ridge),
-]:
-    if name not in sys.modules:
-        fake_module = types.ModuleType(name)
-        setattr(fake_module, name, cls)
-        sys.modules[name] = fake_module
 
 
 # ============================================
-# CUSTOM UNPICKLER THAT HANDLES MODULE ISSUES
+# CUSTOM UNPICKLER - MINIMAL INTERVENTION
+# Only redirect __main__ lookups, let everything else pass through
 # ============================================
 class FlexibleUnpickler(pickle.Unpickler):
     """
-    Custom unpickler that redirects module lookups to handle
-    cases where classes were pickled from __main__ or with wrong paths.
+    Custom unpickler that ONLY handles __main__ references.
+    Everything else uses default behavior.
     """
     
-    CLASS_MAP = {
-        'CatBoostRegressorWrapper': CatBoostRegressorWrapper,
-        'StackingRegressor': StackingRegressor,
-        'VotingRegressor': VotingRegressor,
-        'RandomForestRegressor': RandomForestRegressor,
-        'XGBRegressor': XGBRegressor,
-        'LGBMRegressor': LGBMRegressor,
-        'CatBoostRegressor': CatBoostRegressor,
-        'Ridge': Ridge,
-        'StandardScaler': StandardScaler,
-    }
-    
-    MODULE_MAP = {
-        'sklearn.ensemble._stacking': 'sklearn.ensemble',
-        'sklearn.ensemble._voting': 'sklearn.ensemble',
-        'sklearn.ensemble._forest': 'sklearn.ensemble',
-    }
-    
     def find_class(self, module, name):
-        # First, try our class map for known classes
-        if name in self.CLASS_MAP:
-            return self.CLASS_MAP[name]
-        
-        # Handle module redirects
-        if module in self.MODULE_MAP:
-            module = self.MODULE_MAP[module]
-        
-        # Handle __main__ references
+        # ONLY intercept __main__ references
         if module == '__main__':
-            if name in self.CLASS_MAP:
-                return self.CLASS_MAP[name]
-            # Try to get from current __main__
+            if name == 'CatBoostRegressorWrapper':
+                return CatBoostRegressorWrapper
+            # Try to get from actual __main__
             if hasattr(__main__, name):
                 return getattr(__main__, name)
         
-        # Default behavior
+        # For everything else, use default behavior
         return super().find_class(module, name)
 
 
@@ -286,7 +226,7 @@ def load_model() -> Optional[Any]:
     try:
         logger.info(f"📂 Chargement du modèle: {MODEL_PATH}...")
         
-        # Use custom unpickler to handle module issues
+        # Use custom unpickler to handle __main__ references
         with open(MODEL_PATH, 'rb') as f:
             model_data = FlexibleUnpickler(f).load()
         
